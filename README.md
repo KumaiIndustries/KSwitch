@@ -1,8 +1,8 @@
 <h1 align="center">
   <br>
-  <a href="https://ryujinx.org/"><img src="https://raw.githubusercontent.com/Ryujinx/Ryujinx/master/distribution/misc/Logo.svg" alt="Ryujinx" width="150"></a>
+  <!-- <a href="https://ryujinx.org/">--><img src="https://raw.githubusercontent.com/Ryujinx/Ryujinx/master/distribution/misc/Logo.svg" alt="Ryujinx" width="150"></a>
   <br>
-  <b>Ryujinx</b>
+  <b>KSwitch</b>
   <br>
   <sub><sup><b>(K-Switch)</b></sup></sub>
   <br>
