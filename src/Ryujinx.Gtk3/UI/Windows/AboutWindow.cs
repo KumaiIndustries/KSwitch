@@ -79,7 +79,7 @@ namespace Ryujinx.UI.Windows
 
         private void ChangelogButton_Pressed(object sender, ButtonPressEventArgs args)
         {
-            OpenHelper.OpenUrl("https://github.com/Ryujinx/Ryujinx/wiki/Changelog#ryujinx-changelog");
+            OpenHelper.OpenUrl("https://github.com/KumaiIndsutries/KSwitch/wiki/Changelog");
         }
     }
 }

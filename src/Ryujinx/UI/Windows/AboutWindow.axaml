@@ -88,7 +88,7 @@
                     HorizontalAlignment="Center"
                     Background="Transparent"
                     Click="Button_OnClick"
-                    Tag="https://github.com/Ryujinx/Ryujinx/wiki/Changelog#ryujinx-changelog">
+                    Tag="https://github.com/KumaiIndsutries/KSwitch/wiki/Changelog">
                     <TextBlock
                         FontSize="10"
                         Text="{locale:Locale AboutChangelogButton}"

@@ -168,7 +168,7 @@ namespace Ryujinx.UI.Windows
             //
             // _disclaimerLabel
             //
-            _disclaimerLabel = new Label("Ryujinx is not affiliated with Nintendo™,\nor any of its partners, in any way.")
+            _disclaimerLabel = new Label("KSwitch is not affiliated with Nintendo™,\nor any of its partners, in any way.")
             {
                 Expand = true,
                 Justify = Justification.Center,
