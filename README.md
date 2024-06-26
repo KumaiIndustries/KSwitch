@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <!-- <a href="https://ryujinx.org/">--><img src="https://raw.githubusercontent.com/KumaiIndustries/KSwitch/master/distribution/misc/Logo_KSwitch.png" alt="KSwitch" width="150"></a>
+  <!-- <a href="https://ryujinx.org/">--><img src="https://raw.githubusercontent.com/KumaiIndsutries/KSwitch/master/distribution/misc/Logo_KSwitch.png" alt="KSwitch" width="150"></a>
   <br>
   <b>KSwitch</b>
   <br>
