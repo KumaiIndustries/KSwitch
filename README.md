@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <!-- <a href="https://ryujinx.org/">--><img src="https://raw.githubusercontent.com/Ryujinx/Ryujinx/master/distribution/misc/Logo.svg" alt="Ryujinx" width="150"></a>
+  <!-- <a href="https://ryujinx.org/">--><img src="https://raw.githubusercontent.com/KumaiIndustries/KSwitch/master/distribution/misc/Logo_KSwitch.png" alt="KSwitch" width="150"></a>
   <br>
   <b>KSwitch</b>
   <br>
@@ -11,7 +11,7 @@
 <p align="center">
   KSwitch is a Nintendo Switch emulator, based on the Ryujinx and now defunct Yuzu emulators.
   This emulator aims at providing excellent accuracy and performance, a user-friendly interface and consistent builds.
-  Ryujinx is available on Github under the <a href="https://github.com/KumaiIndsutries/KSwitch/blob/main/LICENSE" target="_blank">MIT license</a>.
+  KSwitch is available on Github under the <a href="https://github.com/KumaiIndsutries/KSwitch/blob/main/LICENSE" target="_blank">MIT license</a>.
   <br />
 </p>
 
