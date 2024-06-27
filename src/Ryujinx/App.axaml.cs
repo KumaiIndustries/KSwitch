@@ -27,7 +27,7 @@ namespace Ryujinx.Ava
 
             if (OperatingSystem.IsMacOS())
             {
-                Process.Start("/usr/bin/defaults", "write org.ryujinx.Ryujinx ApplePressAndHoldEnabled -bool false");
+                Process.Start("/usr/bin/defaults", "write org.kswitch.KSwitch ApplePressAndHoldEnabled -bool false");
             }
         }
 

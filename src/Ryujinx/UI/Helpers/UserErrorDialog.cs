@@ -7,11 +7,11 @@ namespace Ryujinx.Ava.UI.Helpers
 {
     internal class UserErrorDialog
     {
-        private const string SetupGuideUrl = "https://github.com/Ryujinx/Ryujinx/wiki/Ryujinx-Setup-&-Configuration-Guide";
+        private const string SetupGuideUrl = "https://github.com/KumaiIndsutries/KSwitch/wiki/KSwitch-Setup-&-Configuration-Guide";
 
         private static string GetErrorCode(UserError error)
         {
-            return $"RYU-{(uint)error:X4}";
+            return $"KS-{(uint)error:X4}";
         }
 
         private static string GetErrorTitle(UserError error)

@@ -30,7 +30,7 @@
 		</dict>
 	</array>
     <key>CFBundleIdentifier</key>
-    <string>org.ryujinx.Ryujinx</string>
+    <string>org.kswitch.KSwitch</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleLongVersionString</key>
