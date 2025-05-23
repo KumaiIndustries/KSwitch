@@ -9,7 +9,7 @@
 </h1>
 
 <p align="center">
-  KSwitch is a Nintendo Switch emulator, based on the Ryujinx and now defunct Yuzu emulators.
+  KSwitch is a Nintendo Switch emulator, based on the now defunct Ryujinx and Yuzu emulators. This uses source code from both emulators.
   This emulator aims at providing excellent accuracy and performance, a user-friendly interface and consistent builds.
   KSwitch is available on Github under the <a href="https://github.com/KumaiIndsutries/KSwitch/blob/main/LICENSE" target="_blank">MIT license</a>.
   <br />
