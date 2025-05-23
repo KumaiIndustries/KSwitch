@@ -56,7 +56,7 @@ namespace Ryujinx.Ava.UI.Views.Main
         {
             List<MenuItem> menuItems = new();
 
-            string localePath = "Ryujinx/Assets/Locales";
+            string localePath = "KSwitch/Assets/Locales";
             string localeExt = ".json";
 
             string[] localesPath = EmbeddedResources.GetAllAvailableResources(localePath, localeExt);
