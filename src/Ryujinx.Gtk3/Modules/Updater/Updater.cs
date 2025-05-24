@@ -30,7 +30,7 @@ namespace Ryujinx.Modules
         internal static bool Running;
 
         private static readonly string _homeDir = AppDomain.CurrentDomain.BaseDirectory;
-        private static readonly string _updateDir = Path.Combine(Path.GetTempPath(), "Ryujinx", "update");
+        private static readonly string _updateDir = Path.Combine(Path.GetTempPath(), "KSwitch", "update");
         private static readonly string _updatePublishDir = Path.Combine(_updateDir, "publish");
 
         private static string _buildVer;
@@ -527,7 +527,7 @@ namespace Ryujinx.Modules
             {
                 if (showWarnings)
                 {
-                    GtkDialog.CreateWarningDialog("You cannot update a Dirty build of Ryujinx!", "Please download Ryujinx at https://ryujinx.org/ if you are looking for a supported version.");
+                    GtkDialog.CreateWarningDialog("You cannot update a Dirty build of KSwitch!", "Please download KSwitch at https://ryujinx.org/ if you are looking for a supported version.");
                 }
 
                 return false;

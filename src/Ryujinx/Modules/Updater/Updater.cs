@@ -35,7 +35,7 @@ namespace Ryujinx.Modules
         private static readonly GithubReleasesJsonSerializerContext _serializerContext = new(JsonHelper.GetDefaultSerializerOptions());
 
         private static readonly string _homeDir = AppDomain.CurrentDomain.BaseDirectory;
-        private static readonly string _updateDir = Path.Combine(Path.GetTempPath(), "Ryujinx", "update");
+        private static readonly string _updateDir = Path.Combine(Path.GetTempPath(), "KSwitch", "update");
         private static readonly string _updatePublishDir = Path.Combine(_updateDir, "publish");
         private const int ConnectionCount = 4;
 
@@ -104,7 +104,7 @@ namespace Ryujinx.Modules
 
                 foreach (var asset in fetched.Assets)
                 {
-                    if (asset.Name.StartsWith("ryujinx") && asset.Name.EndsWith(_platformExt))
+                    if (asset.Name.StartsWith("KSwitch") && asset.Name.EndsWith(_platformExt))
                     {
                         _buildUrl = asset.BrowserDownloadUrl;
 
@@ -159,7 +159,7 @@ namespace Ryujinx.Modules
             }
             catch
             {
-                Logger.Error?.Print(LogClass.Application, "Failed to convert the received Ryujinx version from Github!");
+                Logger.Error?.Print(LogClass.Application, "Failed to convert the received KSwitch version from Github!");
 
                 await ContentDialogHelper.CreateWarningDialog(
                     LocaleManager.Instance[LocaleKeys.DialogUpdaterConvertFailedGithubMessage],
@@ -226,7 +226,7 @@ namespace Ryujinx.Modules
             HttpClient result = new();
 
             // Required by GitHub to interact with APIs.
-            result.DefaultRequestHeaders.Add("User-Agent", "Ryujinx-Updater/1.0.0");
+            result.DefaultRequestHeaders.Add("User-Agent", "KSwitch-Updater/1.0.0");
 
             return result;
         }

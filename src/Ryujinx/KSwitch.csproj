@@ -165,4 +165,12 @@
   <ItemGroup>
     <AdditionalFiles Include="Assets\Locales\en_US.json" />
   </ItemGroup>
+<ItemGroup>
+  <None Include="..\..\release.json" Condition="Exists('..\..\release.json')">
+    <Link>release.json</Link>
+    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+
+
 </Project>
