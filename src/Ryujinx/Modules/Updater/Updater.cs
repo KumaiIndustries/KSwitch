@@ -81,7 +81,7 @@ namespace Ryujinx.Modules
             }
             catch
             {
-                Logger.Error?.Print(LogClass.Application, "Failed to convert the current Ryujinx version!");
+                Logger.Error?.Print(LogClass.Application, "Failed to convert the current KSwitch version!");
 
                 await ContentDialogHelper.CreateWarningDialog(
                     LocaleManager.Instance[LocaleKeys.DialogUpdaterConvertFailedMessage],
