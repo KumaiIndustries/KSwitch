@@ -1,7 +1,7 @@
 name: Fix Linux Permissions
 
 permissions:
-  contents: write   # give the token rights to download/upload release assets
+  contents: write  # ensures GITHUB_TOKEN can update releases and upload assets
 
 on:
   workflow_dispatch:
@@ -16,16 +16,20 @@ env:
 jobs:
   fix-perms:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # for gh CLI
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Determine variables
+      - name: Authenticate gh CLI
+        shell: bash
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          gh auth status
+
+      - name: Set variables
         id: vars
         shell: bash
         run: |
@@ -34,26 +38,28 @@ jobs:
           ASSET="KSwitch-${TAG}-linux_${ARCH}.tar.gz"
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "ASSET=$ASSET" >> $GITHUB_ENV
-          echo "Will fix $ASSET in release $TAG"
+          echo "Will fix permissions on asset: $ASSET"
 
       - name: Download existing Linux tar.gz
         shell: bash
         run: |
           mkdir -p artifacts
-          gh release download "$TAG" --pattern "$ASSET" --repo "${REPO}" --dir artifacts
-          ls -lh artifacts
+          cd artifacts
+          gh release download "$TAG" --pattern "$ASSET" --repo "${{ env.REPO }}"
+          ls -lh
 
       - name: Extract, chmod +x, and re-tar
         shell: bash
         run: |
           mkdir unpack
-          tar -xzf "artifacts/$ASSET" -C unpack
+          tar -xzf "artifacts/${ASSET}" -C unpack
           chmod +x unpack/KSwitch
-          mv "artifacts/$ASSET" "artifacts/${ASSET}.bak"
-          tar -czf "artifacts/$ASSET" -C unpack .
+          mv "artifacts/${ASSET}" "artifacts/${ASSET}.bak"
+          tar -czf "artifacts/${ASSET}" -C unpack .
           ls -lh artifacts
 
       - name: Upload fixed tar.gz (overwrite)
         shell: bash
         run: |
-          gh release upload "$TAG" "artifacts/$ASSET" --clobber --repo "${REPO}"
+          gh release upload "$TAG" "artifacts/${ASSET}" \
+            --clobber --repo "${{ env.REPO }}"
