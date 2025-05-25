@@ -102,19 +102,19 @@ namespace Ryujinx.Modules
                 string fetchedJson = await jsonClient.GetStringAsync(buildInfoUrl);
                 var fetched = JsonHelper.Deserialize(fetchedJson, _serializerContext.GithubReleasesJsonResponse);
                 var versionMatch = Regex.Match(fetched.Name, @"\d+\.\d+(\.\d+)?");
-if (!versionMatch.Success)
-{
-    Logger.Error?.Print(LogClass.Application, "Failed to extract version number from GitHub release name!");
+                if (!versionMatch.Success)
+                {
+                    Logger.Error?.Print(LogClass.Application, "Failed to extract version number from GitHub release name!");
 
-    await ContentDialogHelper.CreateWarningDialog(
-        LocaleManager.Instance[LocaleKeys.DialogUpdaterConvertFailedGithubMessage],
-        LocaleManager.Instance[LocaleKeys.DialogUpdaterCancelUpdateMessage]);
+                    await ContentDialogHelper.CreateWarningDialog(
+                        LocaleManager.Instance[LocaleKeys.DialogUpdaterConvertFailedGithubMessage],
+                        LocaleManager.Instance[LocaleKeys.DialogUpdaterCancelUpdateMessage]);
 
-    _running = false;
-    return;
-}
+                    _running = false;
+                    return;
+                }
 
-_buildVer = versionMatch.Value;
+                _buildVer = versionMatch.Value;
 
 
                 foreach (var asset in fetched.Assets)
