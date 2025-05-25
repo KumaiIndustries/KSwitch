@@ -1,130 +1,138 @@
 name: Build & Release KSwitch
 
 on:
-  # Auto-run when you git push --tags v1.0.0
+  # Automatic on tag pushes like `v1.2.3`
   push:
     tags:
       - 'v*'
-  # Manual trigger: click "Run workflow" and enter your tag
+  # Manual dispatch to allow specifying a tag
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (include leading v, e.g. v1.0.1)'
+        description: 'Release tag (with leading v), e.g. v1.0.1'
         required: true
-        default: ''
 
 env:
   REPO: KumaiIndustries/KSwitch
-  PROJECT: src/Ryujinx/KSwitch.csproj
-  OUT_WIN: artifacts/win_x64
-  OUT_LIN: artifacts/linux-x64
+  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
+  OUTPUT_WIN: artifacts/win_x64
+  OUTPUT_LIN: artifacts/linux-x64
 
 jobs:
-  build-and-upload:
+  release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🚀 Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0   # needed for full git history so we can get tags & commit hash
 
-      - name: 🛠️ Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.x'
+    - name: Set up .NET 8 SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
 
-      - name: 🔖 Determine version tag
-        id: tag
-        shell: bash
-        run: |
-          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
-            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          else
-            echo "::error::Not a tag build and no manual tag provided"
-            exit 1
-          fi
+    - name: Determine TAG
+      id: tag
+      shell: bash
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # manual run: use supplied input
+          TAG="${{ github.event.inputs.tag }}"
+        elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          # triggered by tag push
+          TAG="${GITHUB_REF#refs/tags/}"
+        else
+          echo "::error::This workflow only runs on tag pushes or manual dispatch with a tag"
+          exit 1
+        fi
+        echo "Determined TAG: $TAG"
+        echo "TAG=$TAG" >> $GITHUB_ENV
 
-      - name: 📝 Create release.json
-        shell: bash
-        run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          cat > release.json <<EOF
-          {
-            "BuildVersion":"${TAG}",
-            "BuildGitHash":"$GIT_HASH",
-            "ReleaseChannelName":"stable",
-            "ConfigFileName":"Config.json",
-            "ReleaseChannelOwner":"KumaiIndustries",
-            "ReleaseChannelRepo":"KSwitch"
-          }
-          EOF
+    - name: Create release.json
+      shell: bash
+      run: |
+        GIT_HASH=$(git rev-parse HEAD)
+        cat > release.json <<EOF
+        {
+          "BuildVersion": "${TAG}",
+          "BuildGitHash": "$GIT_HASH",
+          "ReleaseChannelName": "stable",
+          "ConfigFileName": "Config.json",
+          "ReleaseChannelOwner": "KumaiIndustries",
+          "ReleaseChannelRepo": "KSwitch"
+        }
+        EOF
 
-      - name: 📦 Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name:    ${{ env.TAG }}
-          token:   ${{ secrets.GITHUB_TOKEN }}
-          draft:   false
-          prerelease: false
+    - name: Create or update GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG }}
+        name: ${{ env.TAG }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        draft: false
+        prerelease: false
+        skip_upload: true
 
-      - name: 🏗️ Publish Windows (win-x64)
-        shell: bash
-        run: |
-          dotnet publish ${{ env.PROJECT }} \
-            -c Release -r win-x64 --self-contained true \
-            /p:PublishSingleFile=true -o ${{ env.OUT_WIN }}
+    - name: Build + Publish Windows (win-x64)
+      shell: bash
+      run: |
+        mkdir -p $OUTPUT_WIN
+        dotnet publish $PROJECT_PATH \
+          -c Release -r win-x64 --self-contained true \
+          /p:PublishSingleFile=true \
+          -o $OUTPUT_WIN
+        # Strip PDBs
+        find $OUTPUT_WIN -name '*.pdb' -delete
 
-      - name: 🧹 Strip PDBs from Windows
-        shell: bash
-        run: |
-          find ${{ env.OUT_WIN }} -name '*.pdb' -delete
+    - name: Build + Publish Linux (linux-x64)
+      shell: bash
+      run: |
+        mkdir -p $OUTPUT_LIN
+        dotnet publish $PROJECT_PATH \
+          -c Release -r linux-x64 --self-contained true \
+          /p:PublishSingleFile=true \
+          -o $OUTPUT_LIN
+        # Strip PDBs
+        find $OUTPUT_LIN -name '*.pdb' -delete
 
-      - name: 🏗️ Publish Linux (linux-x64)
-        shell: bash
-        run: |
-          dotnet publish ${{ env.PROJECT }} \
-            -c Release -r linux-x64 --self-contained true \
-            /p:PublishSingleFile=true -o ${{ env.OUT_LIN }}
+    - name: Archive Windows (.zip)
+      id: winzip
+      shell: bash
+      run: |
+        ZIP="KSwitch-${TAG}-win_x64.zip"
+        rm -f "$ZIP"
+        cd $OUTPUT_WIN
+        zip -r "../../$ZIP" .
+        cd -
+        echo "artifact=$ZIP" >> $GITHUB_OUTPUT
 
-      - name: 🧹 Strip PDBs from Linux
-        shell: bash
-        run: |
-          find ${{ env.OUT_LIN }} -name '*.pdb' -delete
+    - name: Archive Linux (.tar.gz)
+      id: lintar
+      shell: bash
+      run: |
+        TAR="KSwitch-${TAG}-linux_x64.tar.gz"
+        rm -f "$TAR"
+        cd $OUTPUT_LIN
+        tar -czf "../../$TAR" .
+        cd -
+        echo "artifact=$TAR" >> $GITHUB_OUTPUT
 
-      - name: 🗜️ Archive Windows (zip)
-        id: zip
-        shell: bash
-        run: |
-          ZIP="KSwitch-${TAG}-win_x64.zip"
-          rm -f "$ZIP"
-          zip -r "$ZIP" "${{ env.OUT_WIN }}"
-          echo "artifact=$ZIP" >> $GITHUB_OUTPUT
+    - name: Upload Windows Asset
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG }}
+        files: ${{ steps.winzip.outputs.artifact }}
+        token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🗜️ Archive Linux (tar.gz)
-        id: targz
-        shell: bash
-        run: |
-          TAR="KSwitch-${TAG}-linux_x64.tar.gz"
-          rm -f "$TAR"
-          tar -czf "$TAR" -C "${{ env.OUT_LIN }}" .
-          echo "artifact=$TAR" >> $GITHUB_OUTPUT
+    - name: Upload Linux Asset
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG }}
+        files: ${{ steps.lintar.outputs.artifact }}
+        token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🚀 Upload Windows asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          files: ${{ steps.zip.outputs.artifact }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🚀 Upload Linux asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          files: ${{ steps.targz.outputs.artifact }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🧹 Clean up
-        shell: bash
-        run: rm -f release.json
+    - name: Clean up
+      shell: bash
+      run: rm -f release.json
