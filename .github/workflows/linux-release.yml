@@ -1,0 +1,47 @@
+name: Build Linux Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number'
+        required: true
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore KSwitch/src/Ryujinx/KSwitch.csproj
+
+      - name: Publish for Linux (linux-x64)
+        run: |
+          dotnet publish KSwitch/src/Ryujinx/KSwitch.csproj \
+            -c Release -r linux-x64 --self-contained true \
+            /p:PublishSingleFile=true \
+            -o ./artifacts/linux-x64
+
+      - name: Make binary executable
+        run: chmod +x ./artifacts/linux-x64/KSwitch
+
+      - name: Create tar.gz archive
+        run: |
+          cd artifacts/linux-x64
+          tar -czf ../../KSwitch-${{ github.event.inputs.version }}-linux_x64.tar.gz .
+          cd ../..
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          files: KSwitch-${{ github.event.inputs.version }}-linux_x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
