@@ -1,7 +1,7 @@
 name: Fix Linux Permissions
 
 permissions:
-  contents: write  # ensures GITHUB_TOKEN can update releases and upload assets
+  contents: write
 
 on:
   workflow_dispatch:
@@ -29,22 +29,24 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
           gh auth status
 
-      - name: Set variables
+      - name: Compute asset filename
         id: vars
         shell: bash
         run: |
           TAG="${{ github.event.inputs.tag }}"
+          # Strip leading 'v' or 'V'
+          VERSION_NO_V="${TAG#v}"
+          VERSION_NO_V="${VERSION_NO_V#V}"
           ARCH="x64"
-          ASSET="KSwitch-${TAG}-linux_${ARCH}.tar.gz"
+          ASSET="KSwitch-${VERSION_NO_V}-linux_${ARCH}.tar.gz"
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "ASSET=$ASSET" >> $GITHUB_ENV
-          echo "Will fix permissions on asset: $ASSET"
+          echo "Looking for asset: $ASSET"
 
       - name: Download existing Linux tar.gz
         shell: bash
         run: |
-          mkdir -p artifacts
-          cd artifacts
+          mkdir -p artifacts && cd artifacts
           gh release download "$TAG" --pattern "$ASSET" --repo "${{ env.REPO }}"
           ls -lh
 
