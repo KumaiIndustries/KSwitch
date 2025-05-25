@@ -1,7 +1,7 @@
 name: Fix Linux Permissions
 
 permissions:
-  contents: write
+  contents: write   # give the token rights to download/upload release assets
 
 on:
   workflow_dispatch:
@@ -10,23 +10,22 @@ on:
         description: 'Release tag (with leading v), e.g. v1.0.1'
         required: true
 
+env:
+  REPO: KumaiIndustries/KSwitch
+
 jobs:
   fix-perms:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # for gh CLI
 
     steps:
-      - name: Checkout repo (for gh CLI config)
+      - name: Checkout repo
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Authenticate gh CLI
-        shell: bash
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          gh auth status
-
-      - name: Set variables
+      - name: Determine variables
         id: vars
         shell: bash
         run: |
@@ -35,14 +34,14 @@ jobs:
           ASSET="KSwitch-${TAG}-linux_${ARCH}.tar.gz"
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "ASSET=$ASSET" >> $GITHUB_ENV
-          echo "Determined ASSET=$ASSET"
+          echo "Will fix $ASSET in release $TAG"
 
       - name: Download existing Linux tar.gz
         shell: bash
         run: |
-          mkdir -p artifacts && cd artifacts
-          gh release download "$TAG" --pattern "$ASSET" --repo "${{ env.REPO }}"
-          ls -lh
+          mkdir -p artifacts
+          gh release download "$TAG" --pattern "$ASSET" --repo "${REPO}" --dir artifacts
+          ls -lh artifacts
 
       - name: Extract, chmod +x, and re-tar
         shell: bash
@@ -57,4 +56,4 @@ jobs:
       - name: Upload fixed tar.gz (overwrite)
         shell: bash
         run: |
-          gh release upload "$TAG" "artifacts/$ASSET" --clobber --repo "${{ env.REPO }}"
+          gh release upload "$TAG" "artifacts/$ASSET" --clobber --repo "${REPO}"
