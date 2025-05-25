@@ -1,53 +1,55 @@
-name: Build and Release KSwitch
+name: Build & Release KSwitch
 
 on:
   # Auto-run when you push a tag like 'v1.0.0'
   push:
     tags:
       - 'v*'
-  # Also expose a manual "Run workflow" button where you can type a tag
+  # Manual trigger button, supply 'tag' (including leading 'v')
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (including the leading v), e.g. v1.0.1'
+        description: 'Tag to release (must include leading v), e.g. v1.0.1'
         required: true
-        default: ''
 
 env:
   REPO: KumaiIndustries/KSwitch
+  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
   OUTPUT_DIR_WIN: artifacts/win_x64
   OUTPUT_DIR_LINUX: artifacts/linux-x64
-  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
 
 jobs:
-  release:
+  build-and-upload:
     runs-on: windows-latest
-    name: Build & Upload
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up .NET
+      - name: Set up .NET SDK
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '8.0.x'
 
       - name: Determine version tag
         id: version
+        shell: bash
         run: |
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
-          else
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          else
+            echo "::error::Not a tag build and no manual tag provided"
+            exit 1
           fi
-        shell: bash
 
       - name: Create release.json
+        shell: bash
         run: |
-          git fetch --unshallow || echo "already full clone"
+          git fetch --unshallow || true
           GIT_HASH=$(git rev-parse HEAD)
-          cat <<EOF > release.json
+          cat > release.json <<EOF
           {
             "BuildVersion": "${{ env.TAG }}",
             "BuildGitHash": "$GIT_HASH",
@@ -57,62 +59,71 @@ jobs:
             "ReleaseChannelRepo": "KSwitch"
           }
           EOF
-        shell: bash
 
-      - name: Create GitHub release if needed
-        uses: softprops/action-gh-release@v1
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           name: ${{ env.TAG }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Windows
-        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ${{ env.OUTPUT_DIR_WIN }}
         shell: pwsh
-
-      - name: Strip PDBs (Windows)
-        run: Remove-Item ${{ env.OUTPUT_DIR_WIN }}\*.pdb -Force -ErrorAction SilentlyContinue
-        shell: pwsh
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} `
+            -c Release -r win-x64 --self-contained true `
+            /p:PublishSingleFile=true `
+            -o ${{ env.OUTPUT_DIR_WIN }}
+          # Strip PDBs
+          Get-ChildItem -Path ${{ env.OUTPUT_DIR_WIN }} -Recurse -Include *.pdb |
+            Remove-Item -Force -ErrorAction SilentlyContinue
 
       - name: Build Linux
-        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ${{ env.OUTPUT_DIR_LINUX }}
         shell: pwsh
-
-      - name: Strip PDBs (Linux)
-        run: Remove-Item ${{ env.OUTPUT_DIR_LINUX }}\*.pdb -Force -ErrorAction SilentlyContinue
-        shell: pwsh
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} `
+            -c Release -r linux-x64 --self-contained true `
+            /p:PublishSingleFile=true `
+            -o ${{ env.OUTPUT_DIR_LINUX }}
+          # Strip PDBs
+          Get-ChildItem -Path ${{ env.OUTPUT_DIR_LINUX }} -Recurse -Include *.pdb |
+            Remove-Item -Force -ErrorAction SilentlyContinue
 
       - name: Archive Windows (.zip)
-        run: |
-          ZIP=KSwitch-${{ env.TAG }}-win_x64.zip
-          Compress-Archive -Path ${{ env.OUTPUT_DIR_WIN }}\* -DestinationPath $ZIP -Force
-          echo "ARTIFACT_WIN=$ZIP" >> $GITHUB_OUTPUT
+        id: archive-win
         shell: pwsh
+        run: |
+          $zip = "KSwitch-${{ env.TAG }}-win_x64.zip"
+          if (Test-Path $zip) { Remove-Item $zip }
+          Compress-Archive -Path ${{ env.OUTPUT_DIR_WIN }}\* -DestinationPath $zip -Force
+          echo "artifact=$zip" >> $GITHUB_OUTPUT
 
       - name: Archive Linux (.tar.gz)
+        id: archive-linux
+        shell: bash
         run: |
-          # use underscore in filename: linux_x64.tar.gz
-          TAR=KSwitch-${{ env.TAG }}-linux_x64.tar.gz
-          tar -czf $TAR -C ${{ env.OUTPUT_DIR_LINUX }} .
-          echo "ARTIFACT_LIN=$TAR" >> $GITHUB_OUTPUT
+          mkdir -p ${{ env.OUTPUT_DIR_LINUX }}
+          TAR="KSwitch-${{ env.TAG }}-linux_x64.tar.gz"
+          rm -f "$TAR"
+          tar -czf "$TAR" -C "${{ env.OUTPUT_DIR_LINUX }}" .
+          echo "artifact=$TAR" >> $GITHUB_OUTPUT
 
       - name: Upload Windows Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.archive-windows.outputs.ARTIFACT_WIN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.TAG }}
+          files: ${{ steps.archive-win.outputs.artifact }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.archive-linux.outputs.ARTIFACT_LIN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.TAG }}
+          files: ${{ steps.archive-linux.outputs.artifact }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clean up
-        run: rm release.json
+      - name: Cleanup
         shell: bash
+        run: rm -f release.json
