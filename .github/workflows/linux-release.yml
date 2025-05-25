@@ -1,9 +1,8 @@
-name: Build and Release KSwitch
-
 on:
   push:
     tags:
-      - 'v*'   # Triggers on version tags like v1.0.0
+      - 'v*'
+  workflow_dispatch:
 
 env:
   VERSION: ${{ github.ref_name }}
