@@ -1,16 +1,16 @@
 name: Build & Release KSwitch
 
 permissions:
-  contents: write  # needed to create/update releases & upload assets
+  contents: write   # ensure GITHUB_TOKEN can create/update releases & upload assets
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'        # auto runs on any tag like v1.0.0
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (with leading v), e.g. v1.0.1'
+        description: 'Release tag (must include leading v), e.g. v1.0.1'
         required: true
 
 env:
@@ -47,7 +47,7 @@ jobs:
             exit 1
           fi
 
-          # strip leading 'v' or 'V' for artifact names
+          # Remove leading 'v' or 'V' for artifact filenames
           VERSION_NO_V="${TAG#v}"
           VERSION_NO_V="${VERSION_NO_V#V}"
 
@@ -88,6 +88,8 @@ jobs:
             -c Release -r win-x64 --self-contained true \
             /p:PublishSingleFile=true \
             -o $OUTPUT_WIN
+
+          # Remove PDBs
           find $OUTPUT_WIN -name '*.pdb' -delete
 
       - name: Build + Publish Linux (linux-x64)
@@ -98,7 +100,11 @@ jobs:
             -c Release -r linux-x64 --self-contained true \
             /p:PublishSingleFile=true \
             -o $OUTPUT_LIN
+
+          # Remove PDBs
           find $OUTPUT_LIN -name '*.pdb' -delete
+
+          # Ensure the KSwitch binary is executable
           chmod +x $OUTPUT_LIN/KSwitch
 
       - name: Archive Windows (.zip)
