@@ -26,6 +26,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace Ryujinx.Modules
 {
@@ -100,7 +101,21 @@ namespace Ryujinx.Modules
                 string buildInfoUrl = $"{GitHubApiUrl}/repos/{ReleaseInformation.ReleaseChannelOwner}/{ReleaseInformation.ReleaseChannelRepo}/releases/latest";
                 string fetchedJson = await jsonClient.GetStringAsync(buildInfoUrl);
                 var fetched = JsonHelper.Deserialize(fetchedJson, _serializerContext.GithubReleasesJsonResponse);
-                _buildVer = fetched.Name;
+                var versionMatch = Regex.Match(fetched.Name, @"\d+\.\d+(\.\d+)?");
+if (!versionMatch.Success)
+{
+    Logger.Error?.Print(LogClass.Application, "Failed to extract version number from GitHub release name!");
+
+    await ContentDialogHelper.CreateWarningDialog(
+        LocaleManager.Instance[LocaleKeys.DialogUpdaterConvertFailedGithubMessage],
+        LocaleManager.Instance[LocaleKeys.DialogUpdaterCancelUpdateMessage]);
+
+    _running = false;
+    return;
+}
+
+_buildVer = versionMatch.Value;
+
 
                 foreach (var asset in fetched.Assets)
                 {
