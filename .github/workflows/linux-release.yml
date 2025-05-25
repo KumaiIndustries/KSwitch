@@ -1,148 +1,56 @@
-name: Build & Release KSwitch
+name: Fix Linux Permissions
 
 permissions:
-  contents: write   # ensure GITHUB_TOKEN can create/update releases & upload assets
+  contents: write
 
 on:
-  push:
-    tags:
-      - 'v*'        # auto runs on any tag like v1.0.0
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (must include leading v), e.g. v1.0.1'
+        description: 'Release tag (with leading v), e.g. v1.0.1'
         required: true
 
-env:
-  REPO: KumaiIndustries/KSwitch
-  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
-  OUTPUT_WIN: artifacts/win_x64
-  OUTPUT_LIN: artifacts/linux-x64
-
 jobs:
-  release:
+  fix-perms:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout (for gh CLI config)
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
-      - name: Setup .NET 8 SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.x'
+      - name: Install GitHub CLI
+        uses: cli/cli@v3
 
-      - name: Determine TAG and VERSION_NO_V
+      - name: Determine variables
         id: vars
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ github.event.inputs.tag }}"
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          else
-            echo "::error::This workflow only runs on tag pushes or manual dispatch with a tag"
-            exit 1
-          fi
-
-          # Remove leading 'v' or 'V' for artifact filenames
-          VERSION_NO_V="${TAG#v}"
-          VERSION_NO_V="${VERSION_NO_V#V}"
-
+          TAG="${{ github.event.inputs.tag }}"
+          ARCH="x64"   # or detect automatically if needed
+          ASSET_PATTERN="KSwitch-${TAG}-linux_${ARCH}.tar.gz"
           echo "TAG=$TAG" >> $GITHUB_ENV
-          echo "VERSION_NO_V=$VERSION_NO_V" >> $GITHUB_ENV
-          echo "Determined TAG=$TAG, VERSION_NO_V=$VERSION_NO_V"
+          echo "ARCH=$ARCH" >> $GITHUB_ENV
+          echo "ASSET=$ASSET_PATTERN" >> $GITHUB_ENV
 
-      - name: Create release.json
+      - name: Download existing Linux tar.gz
         shell: bash
         run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          cat > release.json <<EOF
-          {
-            "BuildVersion": "${VERSION_NO_V}",
-            "BuildGitHash": "$GIT_HASH",
-            "ReleaseChannelName": "stable",
-            "ConfigFileName": "Config.json",
-            "ReleaseChannelOwner": "KumaiIndustries",
-            "ReleaseChannelRepo": "KSwitch"
-          }
-          EOF
+          mkdir artifacts && cd artifacts
+          gh release download "$TAG" --pattern "${ASSET}" --repo "${{ env.REPO }}"
+          ls -lh
 
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: ${{ env.TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
-          prerelease: false
-          skip_upload: true
-
-      - name: Build + Publish Windows (win-x64)
+      - name: Extract, chmod +x, and re‐tar
         shell: bash
         run: |
-          mkdir -p $OUTPUT_WIN
-          dotnet publish $PROJECT_PATH \
-            -c Release -r win-x64 --self-contained true \
-            /p:PublishSingleFile=true \
-            -o $OUTPUT_WIN
+          mkdir unpack
+          tar -xzf "$ASSET" -C unpack
+          chmod +x unpack/KSwitch
+          mv "$ASSET" "${ASSET}.bak"
+          tar -czf "$ASSET" -C unpack .
+          ls -lh
 
-          # Remove PDBs
-          find $OUTPUT_WIN -name '*.pdb' -delete
-
-      - name: Build + Publish Linux (linux-x64)
+      - name: Upload fixed tar.gz (overwrite)
         shell: bash
         run: |
-          mkdir -p $OUTPUT_LIN
-          dotnet publish $PROJECT_PATH \
-            -c Release -r linux-x64 --self-contained true \
-            /p:PublishSingleFile=true \
-            -o $OUTPUT_LIN
+          gh release upload "$TAG" "artifacts/$ASSET" --clobber --repo "${{ env.REPO }}"
 
-          # Remove PDBs
-          find $OUTPUT_LIN -name '*.pdb' -delete
-
-          # Ensure the KSwitch binary is executable
-          chmod +x $OUTPUT_LIN/KSwitch
-
-      - name: Archive Windows (.zip)
-        id: winzip
-        shell: bash
-        run: |
-          ZIP="KSwitch-${VERSION_NO_V}-win_x64.zip"
-          rm -f "$ZIP"
-          cd $OUTPUT_WIN
-          zip -r "../../$ZIP" .
-          cd -
-          echo "artifact=$ZIP" >> $GITHUB_OUTPUT
-
-      - name: Archive Linux (.tar.gz)
-        id: lintar
-        shell: bash
-        run: |
-          TAR="KSwitch-${VERSION_NO_V}-linux_x64.tar.gz"
-          rm -f "$TAR"
-          cd $OUTPUT_LIN
-          tar -czf "../../$TAR" .
-          cd -
-          echo "artifact=$TAR" >> $GITHUB_OUTPUT
-
-      - name: Upload Windows Asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          files: ${{ steps.winzip.outputs.artifact }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Linux Asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          files: ${{ steps.lintar.outputs.artifact }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Cleanup
-        shell: bash
-        run: rm -f release.json
