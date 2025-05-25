@@ -1,8 +1,7 @@
 name: Build & Release KSwitch
 
-# Grant the GITHUB_TOKEN write permissions to contents (releases, artifacts, etc.)
 permissions:
-  contents: write
+  contents: write  # needed to create/update releases & upload assets
 
 on:
   push:
@@ -35,8 +34,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Determine TAG
-        id: tag
+      - name: Determine TAG and VERSION_NO_V
+        id: vars
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -47,7 +46,14 @@ jobs:
             echo "::error::This workflow only runs on tag pushes or manual dispatch with a tag"
             exit 1
           fi
+
+          # strip leading 'v' or 'V' for artifact names
+          VERSION_NO_V="${TAG#v}"
+          VERSION_NO_V="${VERSION_NO_V#V}"
+
           echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "VERSION_NO_V=$VERSION_NO_V" >> $GITHUB_ENV
+          echo "Determined TAG=$TAG, VERSION_NO_V=$VERSION_NO_V"
 
       - name: Create release.json
         shell: bash
@@ -55,7 +61,7 @@ jobs:
           GIT_HASH=$(git rev-parse HEAD)
           cat > release.json <<EOF
           {
-            "BuildVersion": "${TAG}",
+            "BuildVersion": "${VERSION_NO_V}",
             "BuildGitHash": "$GIT_HASH",
             "ReleaseChannelName": "stable",
             "ConfigFileName": "Config.json",
@@ -74,7 +80,7 @@ jobs:
           prerelease: false
           skip_upload: true
 
-      - name: Build + Publish Windows
+      - name: Build + Publish Windows (win-x64)
         shell: bash
         run: |
           mkdir -p $OUTPUT_WIN
@@ -84,7 +90,7 @@ jobs:
             -o $OUTPUT_WIN
           find $OUTPUT_WIN -name '*.pdb' -delete
 
-      - name: Build + Publish Linux
+      - name: Build + Publish Linux (linux-x64)
         shell: bash
         run: |
           mkdir -p $OUTPUT_LIN
@@ -93,12 +99,13 @@ jobs:
             /p:PublishSingleFile=true \
             -o $OUTPUT_LIN
           find $OUTPUT_LIN -name '*.pdb' -delete
+          chmod +x $OUTPUT_LIN/KSwitch
 
       - name: Archive Windows (.zip)
         id: winzip
         shell: bash
         run: |
-          ZIP="KSwitch-${TAG}-win_x64.zip"
+          ZIP="KSwitch-${VERSION_NO_V}-win_x64.zip"
           rm -f "$ZIP"
           cd $OUTPUT_WIN
           zip -r "../../$ZIP" .
@@ -109,7 +116,7 @@ jobs:
         id: lintar
         shell: bash
         run: |
-          TAR="KSwitch-${TAG}-linux_x64.tar.gz"
+          TAR="KSwitch-${VERSION_NO_V}-linux_x64.tar.gz"
           rm -f "$TAR"
           cd $OUTPUT_LIN
           tar -czf "../../$TAR" .
