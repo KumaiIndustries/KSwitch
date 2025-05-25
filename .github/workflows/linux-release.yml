@@ -1,41 +1,42 @@
 name: Build & Release KSwitch
 
 on:
-  # Auto-run when you push a tag like 'v1.0.0'
+  # Auto-run when you git push --tags v1.0.0
   push:
     tags:
       - 'v*'
-  # Manual trigger button, supply 'tag' (including leading 'v')
+  # Manual trigger: click "Run workflow" and enter your tag
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (must include leading v), e.g. v1.0.1'
+        description: 'Release tag (include leading v, e.g. v1.0.1)'
         required: true
+        default: ''
 
 env:
   REPO: KumaiIndustries/KSwitch
-  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
-  OUTPUT_DIR_WIN: artifacts/win_x64
-  OUTPUT_DIR_LINUX: artifacts/linux-x64
+  PROJECT: src/Ryujinx/KSwitch.csproj
+  OUT_WIN: artifacts/win_x64
+  OUT_LIN: artifacts/linux-x64
 
 jobs:
   build-and-upload:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 🚀 Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up .NET SDK
+      - name: 🛠️ Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '8.0.x'
 
-      - name: Determine version tag
-        id: version
+      - name: 🔖 Determine version tag
+        id: tag
         shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
+          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
             echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
@@ -44,86 +45,86 @@ jobs:
             exit 1
           fi
 
-      - name: Create release.json
+      - name: 📝 Create release.json
         shell: bash
         run: |
-          git fetch --unshallow || true
           GIT_HASH=$(git rev-parse HEAD)
           cat > release.json <<EOF
           {
-            "BuildVersion": "${{ env.TAG }}",
-            "BuildGitHash": "$GIT_HASH",
-            "ReleaseChannelName": "stable",
-            "ConfigFileName": "Config.json",
-            "ReleaseChannelOwner": "KumaiIndustries",
-            "ReleaseChannelRepo": "KSwitch"
+            "BuildVersion":"${TAG}",
+            "BuildGitHash":"$GIT_HASH",
+            "ReleaseChannelName":"stable",
+            "ConfigFileName":"Config.json",
+            "ReleaseChannelOwner":"KumaiIndustries",
+            "ReleaseChannelRepo":"KSwitch"
           }
           EOF
 
-      - name: Create or update GitHub Release
+      - name: 📦 Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          name: ${{ env.TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
+          name:    ${{ env.TAG }}
+          token:   ${{ secrets.GITHUB_TOKEN }}
+          draft:   false
           prerelease: false
 
-      - name: Build Windows
-        shell: pwsh
-        run: |
-          dotnet publish ${{ env.PROJECT_PATH }} `
-            -c Release -r win-x64 --self-contained true `
-            /p:PublishSingleFile=true `
-            -o ${{ env.OUTPUT_DIR_WIN }}
-          # Strip PDBs
-          Get-ChildItem -Path ${{ env.OUTPUT_DIR_WIN }} -Recurse -Include *.pdb |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-
-      - name: Build Linux
-        shell: pwsh
-        run: |
-          dotnet publish ${{ env.PROJECT_PATH }} `
-            -c Release -r linux-x64 --self-contained true `
-            /p:PublishSingleFile=true `
-            -o ${{ env.OUTPUT_DIR_LINUX }}
-          # Strip PDBs
-          Get-ChildItem -Path ${{ env.OUTPUT_DIR_LINUX }} -Recurse -Include *.pdb |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-
-      - name: Archive Windows (.zip)
-        id: archive-win
-        shell: pwsh
-        run: |
-          $zip = "KSwitch-${{ env.TAG }}-win_x64.zip"
-          if (Test-Path $zip) { Remove-Item $zip }
-          Compress-Archive -Path ${{ env.OUTPUT_DIR_WIN }}\* -DestinationPath $zip -Force
-          echo "artifact=$zip" >> $GITHUB_OUTPUT
-
-      - name: Archive Linux (.tar.gz)
-        id: archive-linux
+      - name: 🏗️ Publish Windows (win-x64)
         shell: bash
         run: |
-          mkdir -p ${{ env.OUTPUT_DIR_LINUX }}
-          TAR="KSwitch-${{ env.TAG }}-linux_x64.tar.gz"
+          dotnet publish ${{ env.PROJECT }} \
+            -c Release -r win-x64 --self-contained true \
+            /p:PublishSingleFile=true -o ${{ env.OUT_WIN }}
+
+      - name: 🧹 Strip PDBs from Windows
+        shell: bash
+        run: |
+          find ${{ env.OUT_WIN }} -name '*.pdb' -delete
+
+      - name: 🏗️ Publish Linux (linux-x64)
+        shell: bash
+        run: |
+          dotnet publish ${{ env.PROJECT }} \
+            -c Release -r linux-x64 --self-contained true \
+            /p:PublishSingleFile=true -o ${{ env.OUT_LIN }}
+
+      - name: 🧹 Strip PDBs from Linux
+        shell: bash
+        run: |
+          find ${{ env.OUT_LIN }} -name '*.pdb' -delete
+
+      - name: 🗜️ Archive Windows (zip)
+        id: zip
+        shell: bash
+        run: |
+          ZIP="KSwitch-${TAG}-win_x64.zip"
+          rm -f "$ZIP"
+          zip -r "$ZIP" "${{ env.OUT_WIN }}"
+          echo "artifact=$ZIP" >> $GITHUB_OUTPUT
+
+      - name: 🗜️ Archive Linux (tar.gz)
+        id: targz
+        shell: bash
+        run: |
+          TAR="KSwitch-${TAG}-linux_x64.tar.gz"
           rm -f "$TAR"
-          tar -czf "$TAR" -C "${{ env.OUTPUT_DIR_LINUX }}" .
+          tar -czf "$TAR" -C "${{ env.OUT_LIN }}" .
           echo "artifact=$TAR" >> $GITHUB_OUTPUT
 
-      - name: Upload Windows Asset
+      - name: 🚀 Upload Windows asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          files: ${{ steps.archive-win.outputs.artifact }}
+          files: ${{ steps.zip.outputs.artifact }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Linux Asset
+      - name: 🚀 Upload Linux asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          files: ${{ steps.archive-linux.outputs.artifact }}
+          files: ${{ steps.targz.outputs.artifact }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cleanup
+      - name: 🧹 Clean up
         shell: bash
         run: rm -f release.json
