@@ -1,11 +1,13 @@
 name: Build & Release KSwitch
 
+# Grant the GITHUB_TOKEN write permissions to contents (releases, artifacts, etc.)
+permissions:
+  contents: write
+
 on:
-  # Automatic on tag pushes like `v1.2.3`
   push:
     tags:
       - 'v*'
-  # Manual dispatch to allow specifying a tag
   workflow_dispatch:
     inputs:
       tag:
@@ -23,116 +25,111 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0   # needed for full git history so we can get tags & commit hash
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Set up .NET 8 SDK
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '8.0.x'
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Determine TAG
-      id: tag
-      shell: bash
-      run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # manual run: use supplied input
-          TAG="${{ github.event.inputs.tag }}"
-        elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
-          # triggered by tag push
-          TAG="${GITHUB_REF#refs/tags/}"
-        else
-          echo "::error::This workflow only runs on tag pushes or manual dispatch with a tag"
-          exit 1
-        fi
-        echo "Determined TAG: $TAG"
-        echo "TAG=$TAG" >> $GITHUB_ENV
+      - name: Determine TAG
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            echo "::error::This workflow only runs on tag pushes or manual dispatch with a tag"
+            exit 1
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
-    - name: Create release.json
-      shell: bash
-      run: |
-        GIT_HASH=$(git rev-parse HEAD)
-        cat > release.json <<EOF
-        {
-          "BuildVersion": "${TAG}",
-          "BuildGitHash": "$GIT_HASH",
-          "ReleaseChannelName": "stable",
-          "ConfigFileName": "Config.json",
-          "ReleaseChannelOwner": "KumaiIndustries",
-          "ReleaseChannelRepo": "KSwitch"
-        }
-        EOF
+      - name: Create release.json
+        shell: bash
+        run: |
+          GIT_HASH=$(git rev-parse HEAD)
+          cat > release.json <<EOF
+          {
+            "BuildVersion": "${TAG}",
+            "BuildGitHash": "$GIT_HASH",
+            "ReleaseChannelName": "stable",
+            "ConfigFileName": "Config.json",
+            "ReleaseChannelOwner": "KumaiIndustries",
+            "ReleaseChannelRepo": "KSwitch"
+          }
+          EOF
 
-    - name: Create or update GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG }}
-        name: ${{ env.TAG }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        draft: false
-        prerelease: false
-        skip_upload: true
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          skip_upload: true
 
-    - name: Build + Publish Windows (win-x64)
-      shell: bash
-      run: |
-        mkdir -p $OUTPUT_WIN
-        dotnet publish $PROJECT_PATH \
-          -c Release -r win-x64 --self-contained true \
-          /p:PublishSingleFile=true \
-          -o $OUTPUT_WIN
-        # Strip PDBs
-        find $OUTPUT_WIN -name '*.pdb' -delete
+      - name: Build + Publish Windows
+        shell: bash
+        run: |
+          mkdir -p $OUTPUT_WIN
+          dotnet publish $PROJECT_PATH \
+            -c Release -r win-x64 --self-contained true \
+            /p:PublishSingleFile=true \
+            -o $OUTPUT_WIN
+          find $OUTPUT_WIN -name '*.pdb' -delete
 
-    - name: Build + Publish Linux (linux-x64)
-      shell: bash
-      run: |
-        mkdir -p $OUTPUT_LIN
-        dotnet publish $PROJECT_PATH \
-          -c Release -r linux-x64 --self-contained true \
-          /p:PublishSingleFile=true \
-          -o $OUTPUT_LIN
-        # Strip PDBs
-        find $OUTPUT_LIN -name '*.pdb' -delete
+      - name: Build + Publish Linux
+        shell: bash
+        run: |
+          mkdir -p $OUTPUT_LIN
+          dotnet publish $PROJECT_PATH \
+            -c Release -r linux-x64 --self-contained true \
+            /p:PublishSingleFile=true \
+            -o $OUTPUT_LIN
+          find $OUTPUT_LIN -name '*.pdb' -delete
 
-    - name: Archive Windows (.zip)
-      id: winzip
-      shell: bash
-      run: |
-        ZIP="KSwitch-${TAG}-win_x64.zip"
-        rm -f "$ZIP"
-        cd $OUTPUT_WIN
-        zip -r "../../$ZIP" .
-        cd -
-        echo "artifact=$ZIP" >> $GITHUB_OUTPUT
+      - name: Archive Windows (.zip)
+        id: winzip
+        shell: bash
+        run: |
+          ZIP="KSwitch-${TAG}-win_x64.zip"
+          rm -f "$ZIP"
+          cd $OUTPUT_WIN
+          zip -r "../../$ZIP" .
+          cd -
+          echo "artifact=$ZIP" >> $GITHUB_OUTPUT
 
-    - name: Archive Linux (.tar.gz)
-      id: lintar
-      shell: bash
-      run: |
-        TAR="KSwitch-${TAG}-linux_x64.tar.gz"
-        rm -f "$TAR"
-        cd $OUTPUT_LIN
-        tar -czf "../../$TAR" .
-        cd -
-        echo "artifact=$TAR" >> $GITHUB_OUTPUT
+      - name: Archive Linux (.tar.gz)
+        id: lintar
+        shell: bash
+        run: |
+          TAR="KSwitch-${TAG}-linux_x64.tar.gz"
+          rm -f "$TAR"
+          cd $OUTPUT_LIN
+          tar -czf "../../$TAR" .
+          cd -
+          echo "artifact=$TAR" >> $GITHUB_OUTPUT
 
-    - name: Upload Windows Asset
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG }}
-        files: ${{ steps.winzip.outputs.artifact }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Windows Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: ${{ steps.winzip.outputs.artifact }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload Linux Asset
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.TAG }}
-        files: ${{ steps.lintar.outputs.artifact }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Linux Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: ${{ steps.lintar.outputs.artifact }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Clean up
-      shell: bash
-      run: rm -f release.json
+      - name: Cleanup
+        shell: bash
+        run: rm -f release.json
