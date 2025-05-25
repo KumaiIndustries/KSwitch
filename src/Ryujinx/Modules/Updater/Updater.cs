@@ -258,6 +258,8 @@ namespace Ryujinx.Modules
 
             Directory.CreateDirectory(_updateDir);
 
+            Directory.CreateDirectory(_updatePublishDir);
+
             string updateFile = Path.Combine(_updateDir, "update.bin");
 
             TaskDialog taskDialog = new()
@@ -594,12 +596,19 @@ namespace Ryujinx.Modules
         private static void InstallUpdate(TaskDialog taskDialog, string updateFile)
         {
             // Extract Update
-            taskDialog.SubHeader = LocaleManager.Instance[LocaleKeys.UpdaterExtracting];
-            taskDialog.SetProgressBarState(0, TaskDialogProgressState.Normal);
+            Dispatcher.UIThread.Post(() =>
+            {
+                taskDialog.SubHeader = LocaleManager.Instance[LocaleKeys.UpdaterExtracting];
+                taskDialog.SetProgressBarState(0, TaskDialogProgressState.Normal);
+            });
+
+            // Ensure our publish folder exists
+            Directory.CreateDirectory(_updatePublishDir);
 
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                ExtractTarGzipFile(taskDialog, updateFile, _updateDir);
+                // Extract into the publish subfolder
+            ExtractTarGzipFile(taskDialog, updateFile, _updatePublishDir);
             }
             else if (OperatingSystem.IsWindows())
             {
@@ -615,8 +624,12 @@ namespace Ryujinx.Modules
 
             List<string> allFiles = EnumerateFilesToDelete().ToList();
 
-            taskDialog.SubHeader = LocaleManager.Instance[LocaleKeys.UpdaterRenaming];
-            taskDialog.SetProgressBarState(0, TaskDialogProgressState.Normal);
+            Dispatcher.UIThread.Post(() =>
+            {
+                taskDialog.SubHeader = LocaleManager.Instance[LocaleKeys.UpdaterRenaming];
+                taskDialog.SetProgressBarState(0, TaskDialogProgressState.Normal);
+            });
+
 
             // NOTE: On macOS, replacement is delayed to the restart phase.
             if (!OperatingSystem.IsMacOS())
@@ -641,13 +654,16 @@ namespace Ryujinx.Modules
                     }
                 }
 
-                Dispatcher.UIThread.InvokeAsync(() =>
+                Dispatcher.UIThread.Post(() =>
                 {
                     taskDialog.SubHeader = LocaleManager.Instance[LocaleKeys.UpdaterAddingFiles];
                     taskDialog.SetProgressBarState(0, TaskDialogProgressState.Normal);
                 });
 
+
+                // Now copy everything from publish into the real app folder
                 MoveAllFilesOver(_updatePublishDir, _homeDir, taskDialog);
+
 
                 Directory.Delete(_updateDir, true);
             }
