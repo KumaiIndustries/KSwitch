@@ -1,130 +1,118 @@
+name: Build and Release KSwitch
+
 on:
+  # Auto-run when you push a tag like 'v1.0.0'
   push:
     tags:
       - 'v*'
+  # Also expose a manual "Run workflow" button where you can type a tag
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (including the leading v), e.g. v1.0.1'
+        required: true
+        default: ''
 
 env:
-  VERSION: ${{ github.ref_name }}
   REPO: KumaiIndustries/KSwitch
-  OUTPUT_DIR_WIN: ./artifacts/win_x64
-  OUTPUT_DIR_LINUX: ./artifacts/linux-x64
-  PROJECT_PATH: ./src/Ryujinx/KSwitch.csproj
+  OUTPUT_DIR_WIN: artifacts/win_x64
+  OUTPUT_DIR_LINUX: artifacts/linux-x64
+  PROJECT_PATH: src/Ryujinx/KSwitch.csproj
 
 jobs:
-  build-and-release:
+  release:
     runs-on: windows-latest
+    name: Build & Upload
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup .NET SDK
+      - name: Set up .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '7.0.x'  # or your target SDK version
+          dotnet-version: '8.0.x'
 
-      - name: Setup GitHub CLI
-        uses: cli/cli@v3
-
-      - name: PowerShell Release Script
-        shell: pwsh
+      - name: Determine version tag
+        id: version
         run: |
-          param (
-              [string]$Version = "${{ env.VERSION }}",
-              [string]$Repo = "${{ env.REPO }}",
-              [string]$OutputDirWin = "${{ env.OUTPUT_DIR_WIN }}",
-              [string]$OutputDirLinux = "${{ env.OUTPUT_DIR_LINUX }}",
-              [string]$ProjectPath = "${{ env.PROJECT_PATH }}"
-          )
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+        shell: bash
 
-          if (-not $Version) {
-              Write-Host "You must provide a version tag to build."
-              exit 1
+      - name: Create release.json
+        run: |
+          git fetch --unshallow || echo "already full clone"
+          GIT_HASH=$(git rev-parse HEAD)
+          cat <<EOF > release.json
+          {
+            "BuildVersion": "${{ env.TAG }}",
+            "BuildGitHash": "$GIT_HASH",
+            "ReleaseChannelName": "stable",
+            "ConfigFileName": "Config.json",
+            "ReleaseChannelOwner": "KumaiIndustries",
+            "ReleaseChannelRepo": "KSwitch"
           }
+          EOF
+        shell: bash
 
-          # Get current git commit hash
-          $GitHash = git rev-parse HEAD
-          Write-Host "Git commit hash: $GitHash"
+      - name: Create GitHub release if needed
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # Create release.json
-          $releaseJson = @{
-              BuildVersion = $Version
-              BuildGitHash = $GitHash
-              ReleaseChannelName = "stable"
-              ConfigFileName = "Config.json"
-              ReleaseChannelOwner = "KumaiIndustries"
-              ReleaseChannelRepo = "KSwitch"
-          } | ConvertTo-Json -Depth 2
+      - name: Build Windows
+        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ${{ env.OUTPUT_DIR_WIN }}
+        shell: pwsh
 
-          $releaseJsonPath = Join-Path "." "release.json"
-          $releaseJson | Out-File -Encoding UTF8 $releaseJsonPath
-          Write-Host "Created release.json"
+      - name: Strip PDBs (Windows)
+        run: Remove-Item ${{ env.OUTPUT_DIR_WIN }}\*.pdb -Force -ErrorAction SilentlyContinue
+        shell: pwsh
 
-          # Check if release exists
-          gh release view "$Version" --repo $Repo -q . > $null 2>&1
-          if ($LASTEXITCODE -ne 0) {
-              gh release create "$Version" --repo $Repo --title "$Version" --notes "KSwitch version $Version"
-              Write-Host "Created GitHub release $Version"
-          } else {
-              Write-Host "GitHub release $Version already exists"
-          }
+      - name: Build Linux
+        run: dotnet publish ${{ env.PROJECT_PATH }} -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ${{ env.OUTPUT_DIR_LINUX }}
+        shell: pwsh
 
-          # Build the project (just build, no publish yet)
-          Write-Host "Building version $Version..."
-          dotnet build $ProjectPath -c Release /p:Version=$Version
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Build failed."
-              exit 1
-          }
+      - name: Strip PDBs (Linux)
+        run: Remove-Item ${{ env.OUTPUT_DIR_LINUX }}\*.pdb -Force -ErrorAction SilentlyContinue
+        shell: pwsh
 
-          # Publish Windows build
-          Write-Host "Publishing for Windows (win-x64)..."
-          dotnet publish $ProjectPath -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o $OutputDirWin
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Windows publish failed."
-              exit 1
-          }
+      - name: Archive Windows (.zip)
+        run: |
+          ZIP=KSwitch-${{ env.TAG }}-win_x64.zip
+          Compress-Archive -Path ${{ env.OUTPUT_DIR_WIN }}\* -DestinationPath $ZIP -Force
+          echo "ARTIFACT_WIN=$ZIP" >> $GITHUB_OUTPUT
+        shell: pwsh
 
-          # Remove .pdb files from Windows build
-          Get-ChildItem -Path $OutputDirWin -Recurse -Include *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
-          Write-Host "Removed .pdb files from $OutputDirWin"
+      - name: Archive Linux (.tar.gz)
+        run: |
+          # use underscore in filename: linux_x64.tar.gz
+          TAR=KSwitch-${{ env.TAG }}-linux_x64.tar.gz
+          tar -czf $TAR -C ${{ env.OUTPUT_DIR_LINUX }} .
+          echo "ARTIFACT_LIN=$TAR" >> $GITHUB_OUTPUT
 
-          # Publish Linux build
-          Write-Host "Publishing for Linux (linux-x64)..."
-          dotnet publish $ProjectPath -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o $OutputDirLinux
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Linux publish failed."
-              exit 1
-          }
+      - name: Upload Windows Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.archive-windows.outputs.ARTIFACT_WIN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # Remove .pdb files from Linux build
-          Get-ChildItem -Path $OutputDirLinux -Recurse -Include *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
-          Write-Host "Removed .pdb files from $OutputDirLinux"
+      - name: Upload Linux Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.archive-linux.outputs.ARTIFACT_LIN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # Archive Windows build as zip
-          $archivePathWin = "./KSwitch-$Version-win_x64.zip"
-          if (Test-Path $archivePathWin) { Remove-Item $archivePathWin }
-          Compress-Archive -Path "$OutputDirWin\*" -DestinationPath $archivePathWin -Force
-          Write-Host "Archived Windows build to $archivePathWin"
-
-          # Archive Linux build as tar.gz with underscore in filename
-          $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") { "arm64" } else { "x64" }
-          $archivePathLinux = "./KSwitch-$Version-linux_$arch.tar.gz"
-          if (Test-Path $archivePathLinux) { Remove-Item $archivePathLinux }
-
-          # Create .tar.gz for Linux build
-          tar -czf $archivePathLinux -C $OutputDirLinux .
-          Write-Host "Archived Linux build to $archivePathLinux"
-
-          # Upload Windows archive
-          gh release upload "$Version" $archivePathWin --repo $Repo --clobber
-          Write-Host "Uploaded Windows archive to GitHub release $Version"
-
-          # Upload Linux archive
-          gh release upload "$Version" $archivePathLinux --repo $Repo --clobber
-          Write-Host "Uploaded Linux archive to GitHub release $Version"
-
-          # Cleanup
-          Remove-Item $releaseJsonPath -ErrorAction SilentlyContinue
-          Write-Host "Deleted release.json"
+      - name: Clean up
+        run: rm release.json
+        shell: bash
