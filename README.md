@@ -35,7 +35,7 @@
 
 ## Compatibility
 
-As of May 2024, KSwitch has been tested on approximately 4,300 titles;
+As of June 2025, KSwitch has been tested on approximately 4,300 titles (Note that most of this testing was originally conducted by the Ryujinx team for the Ryujinx emulator, some of it having been retested for KSwitch.);
 over 4,100 boot past menus and into gameplay, with roughly 3,550 of those being considered playable.
 
 <!-- You can check out the compatibility list [here](https://github.com/Ryujinx/Ryujinx-Games-List/issues). -->
