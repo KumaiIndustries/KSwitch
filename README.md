@@ -30,7 +30,7 @@
     </a>
     <br>
     <br>
-    <img src="[[https://raw.githubusercontent.com/Ryujinx/Ryujinx-Website/master/public/assets/images/shell.png](https://web.archive.org/web/20240629003505/https://raw.githubusercontent.com/Ryujinx/Ryujinx-Website/master/public/assets/images/shell.png)](https://web.archive.org/web/20240629003505if_/https://raw.githubusercontent.com/Ryujinx/Ryujinx-Website/master/public/assets/images/shell.png)">
+    <img src="https://web.archive.org/web/20240629003505if_/https://raw.githubusercontent.com/Ryujinx/Ryujinx-Website/master/public/assets/images/shell.png">
 </p>
 
 ## Compatibility
